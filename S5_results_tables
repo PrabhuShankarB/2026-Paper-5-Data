@@ -1,0 +1,165 @@
+
+import csv
+import os
+import numpy as np
+from S4_main_simulation import (
+    run_experiment,
+    RECEIVER_COUNTS, FIDELITY_THRESHOLDS
+)
+
+os.makedirs("results", exist_ok=True)
+
+
+def write_csv(filename, headers, rows):
+    path = os.path.join("results", filename)
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(headers)
+        w.writerows(rows)
+    print(f"  Saved: {path}")
+
+
+def export_table8():
+    """ACK overhead comparison at lambda=1%."""
+    rows = []
+    for n in RECEIVER_COUNTS:
+        r = run_experiment(n, 0.01, 0.90)
+        rows.append([
+            n,
+            r["tcp_acks"],
+            500,                         # CAAF sends 1 msg per packet = 500 msgs
+            r["tcp_overhead_kb"],
+            r["caaf_overhead_kb"],
+            r["ack_reduction_pct"],
+        ])
+    write_csv(
+        "table8_ack_overhead.csv",
+        ["n", "ACK_packets_TCP", "ACK_packets_CAAF",
+         "Overhead_TCP_KB", "Overhead_CAAF_KB", "ACK_reduction_pct"],
+        rows
+    )
+
+
+def export_table9():
+    """End-to-end source-node latency at lambda=1%."""
+    rows = []
+    for n in RECEIVER_COUNTS:
+        r = run_experiment(n, 0.01, 0.90)
+        rows.append([
+            n,
+            r["latency_tcp_ms"],
+            r["latency_caaf_ms"],
+            r["latency_saving_ms"],
+            r["latency_saving_pct"],
+        ])
+    write_csv(
+        "table9_latency.csv",
+        ["n", "Latency_TCP_ms", "Latency_CAAF_ms",
+         "Saving_ms", "Saving_pct"],
+        rows
+    )
+
+
+def export_table10():
+    """Retransmission: broadcast TCP vs FASRO selective recovery."""
+    configs = [
+        (0.01, 10), (0.01, 100), (0.01, 500), (0.01, 1000),
+        (0.05, 10), (0.05, 100), (0.05, 500), (0.05, 1000),
+        (0.10, 10), (0.10, 100), (0.10, 500), (0.10, 1000),
+    ]
+    rows = []
+    for lam, n in configs:
+        r = run_experiment(n, lam, 0.90)
+        rows.append([
+            lam, n,
+            r["broadcast_retrans"],
+            r["fasro_retrans"],
+            r["retrans_saving_pkts"],
+            r["retrans_saving_pct"],
+        ])
+    write_csv(
+        "table10_retransmission.csv",
+        ["lambda", "n",
+         "Retransmission_Broadcast_TCP", "Retransmission_FASRO",
+         "Saving_packets", "Saving_pct"],
+        rows
+    )
+
+
+def export_table11():
+    """PDR comparison — strict (Fth=1.00) vs fidelity-threshold (Fth=0.90)."""
+    configs = [
+        (10,   0.01), (50,   0.01), (100, 0.01),
+        (250,  0.01), (500,  0.01), (1000,0.01),
+        (100,  0.05), (100,  0.10),
+        (500,  0.05), (500,  0.10),
+    ]
+    rows = []
+    for n, lam in configs:
+        r = run_experiment(n, lam, 0.90)
+        rows.append([
+            n, lam,
+            r["pdr_strict_pct"],
+            r["pdr_fidelity_pct"],
+            r["pdr_recovery_pp"],
+        ])
+    write_csv(
+        "table11_pdr_comparison.csv",
+        ["n", "lambda",
+         "PDR_strict_Fth1.00_pct",
+         "PDR_fidelity_Fth0.90_pct",
+         "Recovery_percentage_points"],
+        rows
+    )
+
+
+def export_table12():
+    """Fidelity threshold sensitivity — n=100, lambda=1%."""
+    rows = []
+    for fth in sorted(FIDELITY_THRESHOLDS, reverse=True):
+        r      = run_experiment(100, 0.01, fth)
+        k_star = int(np.ceil(fth * 100))
+        rows.append([
+            fth, f"{k_star}/100",
+            r["pdr_fidelity_pct"],
+            f"Up to {100 - k_star} failures tolerated",
+        ])
+    write_csv(
+        "table12_threshold_sensitivity_n100.csv",
+        ["Fth", "Min_receivers_required_k*",
+         "PDR_pct", "Notes"],
+        rows
+    )
+
+
+def export_table13():
+    """Fidelity threshold sensitivity — n=500, lambda=1%."""
+    rows = []
+    for fth in sorted(FIDELITY_THRESHOLDS, reverse=True):
+        r      = run_experiment(500, 0.01, fth)
+        k_star = int(np.ceil(fth * 500))
+        rows.append([
+            fth, f"{k_star}/500",
+            r["pdr_fidelity_pct"],
+            f"Up to {500 - k_star} failures tolerated",
+        ])
+    write_csv(
+        "table13_threshold_sensitivity_n500.csv",
+        ["Fth", "Min_receivers_required_k*",
+         "PDR_pct", "Notes"],
+        rows
+    )
+
+
+if __name__ == "__main__":
+    print("=" * 55)
+    print("QI-CAAF — Exporting result tables to /results/")
+    print("=" * 55)
+    export_table8()
+    export_table9()
+    export_table10()
+    export_table11()
+    export_table12()
+    export_table13()
+    print("\nAll 6 CSV files exported successfully.")
+    print("Upload the /results/ folder to your GitHub repository.")
